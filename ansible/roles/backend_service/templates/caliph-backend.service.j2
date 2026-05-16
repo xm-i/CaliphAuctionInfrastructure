@@ -4,12 +4,13 @@ After=network.target
 
 [Service]
 WorkingDirectory={{ backend_dir }}
-ExecStart=/usr/bin/dotnet {{ backend_dir }}/CaliphAuctionBackend.dll --urls=http://0.0.0.0:{{ backend_port }} --environment={{ backend_env }}
+ExecStart=/opt/dotnet10/dotnet {{ backend_dir }}/CaliphAuctionBackend.dll --urls=http://0.0.0.0:{{ backend_port }} --environment={{ backend_env }}
 Restart=always
 RestartSec=5
 SyslogIdentifier=caliph-backend
 User={{ app_user }}
 Environment=ASPNETCORE_URLS=http://0.0.0.0:{{ backend_port }}
+Environment=DOTNET_ROOT=/opt/dotnet10
 Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
 [Install]

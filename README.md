@@ -12,12 +12,13 @@ Caliph Auction プロジェクトのインフラ用リポジトリです。以�
 - `CaliphAuctionAssets` (画像・静的ファイル) – `/cdn` パスで参照される静的コンテンツ
 - `CaliphAuctionInfrastructure` (本リポジトリ) – サーバープロビジョニング (Ansible), GitHub Actions
 
-本リポジトリでは「実行環境の用意 (nginx, .NET 8 Runtime, PostgreSQL)」のみを行い、アプリケーションのデプロイ (ファイル配置や再起動) は各アプリ側リポジトリのパイプラインで行う想定です。
+本リポジトリでは「実行環境の用意 (nginx, PostgreSQL)」を主に行い、アプリケーションのデプロイ (ファイル配置や再起動) は各アプリ側リポジトリのパイプラインで行う想定です。
+`dotnet` 実行ファイルは Ansible で自動導入せず、サーバー管理者が `/opt/dotnet10/dotnet` に手動配置する運用とします。
 
 ## 対象環境
 - OS: Ubuntu 24.04 (VPS 単一サーバー)
 - Web: nginx (リバースプロキシ)
-- Backend: ASP.NET Core (.NET 8) Kestrel で 5000番ポートを listen
+- Backend: ASP.NET Core (dotnet 実行ファイルは `/opt/dotnet10/dotnet`) Kestrel で 5000番ポートを listen
 - DB: PostgreSQL (Ubuntu 標準リポジトリの meta package `postgresql` を使用 / バージョン固定しない)
 - Frontend: 事前ビルド済みの `dist` を `/var/www/caliph-auction/front` に配置
 - Assets: `/var/www/caliph-auction/cdn`
@@ -38,7 +39,7 @@ ansible/
   group_vars/all.yml
   roles/
     common/            # 共通: ユーザー, UFW, 基本パッケージ
-    dotnet/            # .NET 8 ランタイム導入
+    dotnet/            # dotnet 実行ファイルを `/opt/dotnet10/dotnet` に手動配置する前提の補助設定
     postgres/          # PostgreSQL (Ubuntu 標準) 導入と初期設定 (バージョン自動検出は残す)
     nginx/             # nginx インストールとリバプロ設定 (Cloudflare Origin 証明書による TLS)
     backend_service/   # systemd ユニット (Kestrel) 作成
@@ -89,7 +90,8 @@ Cloudflare Origin Certificates の有効期限は最大 15 年です。証明書
 
 ## systemd ユニット
 `roles/backend_service/templates/caliph-backend.service.j2` で作成。
-`ExecStart=/usr/bin/dotnet /opt/caliph-auction/backend/CaliphAuctionBackend.dll` を想定。各 Backend リポジトリのデプロイ後に `systemctl restart caliph-backend` で再起動してください。
+`ExecStart=/opt/dotnet10/dotnet /opt/caliph-auction/backend/CaliphAuctionBackend.dll` を想定。
+事前にサーバー上で `dotnet` 実行ファイルを `/opt/dotnet10/dotnet` へ配置しておいてください。各 Backend リポジトリのデプロイ後に `systemctl restart caliph-backend` で再起動してください。
 
 ## GitHub Actions
 `.github/workflows/provision.yml` で以下を実施:
