@@ -15,5 +15,4 @@
     - role: dotnet
     - role: postgres
     - role: nginx
-    - role: letsencrypt
     - role: backend_service

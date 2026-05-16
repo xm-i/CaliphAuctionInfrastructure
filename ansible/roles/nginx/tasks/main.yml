@@ -11,14 +11,9 @@
     state: absent
   notify: Restart nginx
 
-- name: Check existing certificate
-  stat:
-    path: /etc/letsencrypt/live/{{ letsencrypt_domains[0] }}/fullchain.pem
-  register: le_cert
-
-- name: Deploy nginx config (http-only or full)
+- name: Deploy nginx config (full)
   template:
-    src: "{{ 'caliph_full.conf.j2' if le_cert.stat.exists else 'caliph_http.conf.j2' }}"
+    src: caliph_full.conf.j2
     dest: /etc/nginx/sites-available/caliph.conf
     owner: root
     group: root

@@ -33,14 +33,5 @@ ufw_allow_ports:
 ssh_port: 30532
 ansible_port: "{{ ssh_port }}"
 
-# TLS / Let's Encrypt (常に有効運用前提)
-letsencrypt_email: "xmi1995@gmail.com"  # 運用用メールに変更
-letsencrypt_domains:
-  - "caliphauction.com"
-  - "www.caliphauction.com"
-  - "api.caliphauction.com"
-  - "cdn.caliphauction.com"
-letsencrypt_webroot: /var/www/letsencrypt  # ACME http-01 用
-
 analyze_dir: /var/www/analyze/caliphauction
 space_dir: /var/www/space

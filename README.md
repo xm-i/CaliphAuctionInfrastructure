@@ -39,8 +39,8 @@ ansible/
   roles/
     common/            # 共通: ユーザー, UFW, 基本パッケージ
     dotnet/            # .NET 8 ランタイム導入
-  postgres/          # PostgreSQL (Ubuntu 標準) 導入と初期設定 (バージョン自動検出は残す)
-    nginx/             # nginx インストールとリバプロ設定
+    postgres/          # PostgreSQL (Ubuntu 標準) 導入と初期設定 (バージョン自動検出は残す)
+    nginx/             # nginx インストールとリバプロ設定 (Cloudflare Origin 証明書による TLS)
     backend_service/   # systemd ユニット (Kestrel) 作成
 ```
 
@@ -63,7 +63,7 @@ Playbook は `postgres_password` が未指定の場合 `assert` で失敗しま�
 
 例 (ローカルから):
 ```bash
-ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml -e "postgres_password=StrongPass123" \
+ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml -e "postgres_password=StrongPass123 ansible_host=your.server.ip" \
   -u deploy --private-key=~/.ssh/your_key
 ```
 
@@ -72,19 +72,20 @@ ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml -e "postgres_pa
 - `/assets/` → 静的ファイル (キャッシュ 30日)
 - `/api/` → Backend へプロキシ (`http://127.0.0.1:5000/api/`)
 
-### TLS / Let's Encrypt 対応 (常時有効)
-本構成では TLS を前提としており、初回プロビジョニング時に以下を自動実行します:
-- `roles/letsencrypt` で `certbot` (webroot) により証明書取得
-- 80番ポート: ACME challenge 以外を 443 へリダイレクト
-- 443番ポート: HSTS / セキュリティヘッダー適用済み
+### TLS / Cloudflare Origin Certificates 対応 (常時有効)
+本構成では Cloudflare を CDN / プロキシとして前段に配置し、オリジンサーバーとの間は **Cloudflare Origin Certificates** で TLS を確立します。
+
+- 80番ポート: 443 へリダイレクト
+- 443番ポート: Cloudflare Origin 証明書を使用、HSTS / セキュリティヘッダー適用済み
+- 証明書パス: `/etc/nginx/ssl/<ドメイン>/cloudflare_origin.pem`, `cloudflare_origin.key`
 
 手順:
-1. DNS を対象ドメイン → VPS IP に正しく向ける
-2. 上記変数を編集 (メール/ドメイン)
-3. Playbook 実行
-4. 証明書は `/etc/letsencrypt/live/<ドメイン>/` 配下に配置され nginx が自動参照
+1. Cloudflare Dashboard → SSL/TLS → Origin Server で Origin Certificate を発行
+2. 取得した `.pem` / `.key` をサーバーの `/etc/nginx/ssl/<ドメイン>/` に配置
+3. DNS を Cloudflare のプロキシ (オレンジ雲) 経由で対象ドメイン → VPS IP に設定
+4. Playbook 実行
 
-証明書更新は `certbot renew` が systemd timer により自動実行 (Ubuntu デフォルト)。必要なら別ロールで明示的な更新タスク・再読み込みを追加可能。
+Cloudflare Origin Certificates の有効期限は最大 15 年です。証明書の自動更新 (certbot 等) は不要です。
 
 ## systemd ユニット
 `roles/backend_service/templates/caliph-backend.service.j2` で作成。
@@ -97,10 +98,11 @@ ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml -e "postgres_pa
 3. SSH 秘密鍵 ( `SSH_PRIVATE_KEY` シークレット ) をエージェント登録
 4. `Secrets.POSTGRES_PASSWORD` を利用し `ansible-playbook` 実行 (workflow_dispatch 入力でパスワードを受け取らない)
 
-### 必要な Secrets (想定)
+### 必要な Secrets
 - `SSH_PRIVATE_KEY` : 対象VPSへ接続できる秘密鍵
+- `SERVER_IP` : 接続先サーバーのIPアドレス（またはドメイン）
 - `POSTGRES_PASSWORD` : PostgreSQL ログイン用アプリユーザーパスワード
-- (将来) `SLACK_WEBHOOK` など通知系
+- `BECOME_PASSWORD` : (任意) sudo 実行に必要なパスワード（NOPASSWD 設定済みの場合は不要）
 
 ### 手動実行方法
 Actions → `Provision Infrastructure` → `Run workflow` で:
@@ -114,16 +116,16 @@ Actions → `Provision Infrastructure` → `Run workflow` で:
 - これらはそれぞれのリポジトリの GitHub Actions から SSH or rsync で実行
 
 ## 今後の改善候補
-- OCSP Stapling / 追加セキュリティヘッダー (Content-Security-Policy など)
+- 追加セキュリティヘッダー (Content-Security-Policy など)
 - staging / production 分離 (`inventory/stg`, `inventory/prod`)
 - 監視/ログ (Prometheus node exporter, fail2ban, logrotate 最適化)
 - Secrets 管理を Ansible Vault / 外部 Secret Manager へ移行
-- certbot 更新後の nginx reload hook (必要なら)
+- Cloudflare Origin 証明書の有効期限管理・アラート (長期間有効だが忘れ防止)
 
 ## ローカルテスト (Dry Run)
 SSH 接続ができる状態で差分のみ確認:
 ```bash
-ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml --check -e "postgres_password=Dummy"
+ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml --check -e "postgres_password=Dummy ansible_host=your.server.ip"
 ```
 
 ## 注意

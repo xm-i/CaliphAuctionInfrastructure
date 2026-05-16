@@ -32,26 +32,23 @@ jobs:
           ssh-private-key: |
             ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Create inventory override (fixed host vps)
-        run: |
-          echo "[web]" > ansible/inventory/gha_host.ini
-          grep -E "^vps(\s|$)" ansible/inventory/hosts.ini >> ansible/inventory/gha_host.ini || true
-          cat ansible/inventory/gha_host.ini
 
       - name: Run Ansible Playbook
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'False'
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           BECOME_PASSWORD: ${{ secrets.BECOME_PASSWORD }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
         run: |
           cd ansible
-          EXTRA_VARS="postgres_password=${POSTGRES_PASSWORD} target_host=vps"
+          # Secretsから取得したIPをansible_hostとして渡す
+          EXTRA_VARS="postgres_password=${POSTGRES_PASSWORD} ansible_host=${SERVER_IP}"
+          
           if [ -n "${BECOME_PASSWORD}" ]; then
             echo "Using become password from secret."
             EXTRA_VARS="$EXTRA_VARS ansible_become_pass=${BECOME_PASSWORD}"
-          else
-            echo "No BECOME_PASSWORD secret provided; assuming passwordless sudo (NOPASSWD) is configured."
           fi
+          
           ansible-playbook -i inventory/hosts.ini site.yml -e "$EXTRA_VARS"
 
       - name: Finish
